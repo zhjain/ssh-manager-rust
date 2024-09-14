@@ -17,8 +17,12 @@
             await goto(`/connections/${connection.id}`)
             $connectionStore.current = connection
         } else {
-            console.log(connection.host+connection.port);
-            await invoke("connection", { url: `${connection.host}:${connection.port}` })
+            // console.log(connection.host + connection.port)
+            await invoke("handle_ssh_command", {
+                command: {
+                    OpenConnection: `${connection.username}:${connection.password}@${connection.host}:${connection.port}`,
+                },
+            })
             await goto(`/connections/${connection.id}`)
             $connectionStore.current = connection
             connection.connected = true

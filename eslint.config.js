@@ -55,7 +55,7 @@ export default [
             },
         },
         rules: {
-            'no-undef': 'none',
+            'no-undef': 'off',
         },
     },
     /**

@@ -5,7 +5,7 @@ use sled::{self, Db};
 use crate::utils::ApiResponse;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RedisConnection {
+pub struct SshConnection {
     id: Option<u64>,
     name: String,
     host: String,
@@ -35,8 +35,8 @@ pub struct RedisConnection {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DbOperation {
-    Insert(RedisConnection),
-    Update(RedisConnection),
+    Insert(SshConnection),
+    Update(SshConnection),
     Delete(u64), // 传入要删除的记录的 ID
     SelectAll,   // 查询所有记录
 }
@@ -71,7 +71,7 @@ pub async fn handle_db_operation(operation: DbOperation) -> Result<serde_json::V
 
 fn save_connection(
     db: &Db,
-    connection: &mut RedisConnection,
+    connection: &mut SshConnection,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let new_id = db.generate_id()?;
     connection.id = Some(new_id); // 将生成的 ID 分配给连接
@@ -81,11 +81,11 @@ fn save_connection(
     Ok(())
 }
 
-fn get_all_connections(db: &Db) -> Result<Vec<RedisConnection>, Box<dyn std::error::Error>> {
+fn get_all_connections(db: &Db) -> Result<Vec<SshConnection>, Box<dyn std::error::Error>> {
     let mut connections = Vec::new();
     for item in db.iter() {
         let (_, value) = item?;
-        let connection: RedisConnection = serde_json::from_slice(&value)?;
+        let connection: SshConnection = serde_json::from_slice(&value)?;
         connections.push(connection);
     }
     Ok(connections)
@@ -93,7 +93,7 @@ fn get_all_connections(db: &Db) -> Result<Vec<RedisConnection>, Box<dyn std::err
 
 fn update_connection(
     db: &Db,
-    connection: &mut RedisConnection,
+    connection: &mut SshConnection,
 ) -> Result<(), Box<dyn std::error::Error>> {
     save_connection(db, connection)
 }

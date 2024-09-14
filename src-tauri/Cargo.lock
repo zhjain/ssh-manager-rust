@@ -3421,6 +3421,9 @@ dependencies = [
 name = "ssh-rust"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "once_cell",
  "russh",
  "russh-config",
  "serde",
@@ -3428,6 +3431,7 @@ dependencies = [
  "sled",
  "tauri",
  "tauri-build",
+ "tokio",
 ]
 
 [[package]]
@@ -3911,6 +3915,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
