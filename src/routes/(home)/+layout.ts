@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
-import { invoke } from '@tauri-apps/api/tauri'
 
 import connectionStore from '$lib/store/connectionStore'
+import { invokeDbOperation } from '$lib/utils'
 
 export async function load() {
     const cachedConnections = get(connectionStore)
@@ -11,12 +11,7 @@ export async function load() {
         return { list: cachedConnections.all }
     }
     try {
-        const res = await invoke<Response<Connection[]>>(
-            'handle_db_operation',
-            {
-                operation: 'SelectAll',
-            },
-        )
+        const res = await invokeDbOperation<Connection[]>('SelectAll')
         connectionStore.update(c => ({ ...c, all: res.data }))
         return { list: res.data }
     } catch {
