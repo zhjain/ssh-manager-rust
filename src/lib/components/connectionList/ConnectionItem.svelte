@@ -1,14 +1,14 @@
+<!-- svelte-ignore a11y-click-events-have-key-events -->
 <script lang="ts">
-    import { invoke } from "@tauri-apps/api/tauri"
     import { goto } from "$app/navigation"
 
     import connectionStore from "$lib/store/connectionStore"
-    import { cn } from "$lib/utils"
+    import { cn, invokeDbOperation, invokeSshCommand } from "$lib/utils"
 
     export let connection: Connection
 
-    // 局部变量, 用于连接状态的缓存, 避免在建立连接时, 连接列表的样式重新渲染
-    let connected = connection.connected
+    // 使用 $: 响应式声明来保持连接状态的同步
+    $: connected = connection.connected
 
     $: isCurrent = $connectionStore.selecting.id === connection.id
 
@@ -17,25 +17,51 @@
             await goto(`/connections/${connection.id}`)
             $connectionStore.current = connection
         } else {
-            // console.log(connection.host + connection.port)
-            await invoke("handle_ssh_command", {
-                command: {
-                    OpenConnection: `${connection.username}:${connection.password}@${connection.host}:${connection.port}`,
-                },
-            })
+            const command: SshCommand = {
+                OpenConnection: `${connection.username}:${connection.password}@${connection.host}:${connection.port}`,
+            }
+            const sshRes = await invokeSshCommand<{
+                id: number
+                message: string
+            }>(command)
             await goto(`/connections/${connection.id}`)
             $connectionStore.current = connection
+            connection.sessionId = sshRes.data.id
             connection.connected = true
         }
     }
-    function disConnect() {
+    async function disConnect() {
+        const command: SshCommand = {
+            CloseConnection: connection.sessionId!,
+        }
+        await invokeSshCommand<{
+            id: number
+            message: string
+        }>(command)
         connection.connected = false
-        connected = false
+        connection.sessionId = undefined
+        // connected = false
     }
     function setCurrent() {
         $connectionStore.selecting = connection
     }
-    function deleteConnection() {
+    async function deleteConnection() {
+        if (connected) {
+            const command: SshCommand = {
+                CloseConnection: connection.sessionId!,
+            }
+            await invokeSshCommand<{
+                id: number
+                message: string
+            }>(command)
+            connection.connected = false
+            connection.sessionId = undefined
+            // connected = false
+        }
+        const dbCommand: DbOperation = {
+            Delete: connection.id,
+        }
+        await invokeDbOperation<Connection>(dbCommand)
         $connectionStore.all = $connectionStore.all.filter(
             c => c.id !== connection.id,
         )
@@ -45,12 +71,15 @@
     }
 </script>
 
-<button
+<div
     on:click="{setCurrent}"
     on:dblclick="{goConnect}"
-    class="{cn('flex flex-row w-full justify-between items-center px-4', {
-        'bg-red-200 transition-all': isCurrent,
-    })}">
+    class="{cn(
+        'flex flex-row w-full justify-between cursor-pointer items-center px-4',
+        {
+            'bg-red-200 transition-all': isCurrent,
+        },
+    )}">
     <div class="flex gap-2 items-center">
         <div
             class="{cn(
@@ -63,16 +92,19 @@
     {#if isCurrent}
         <div class="flex gap-2 items-center">
             {#if connection.connected}
-                <button on:click="{disConnect}" class="text-gray-500 text-sm"
-                    >断开</button>
+                <div on:click="{disConnect}" class="text-gray-500 text-sm">
+                    断开
+                </div>
             {:else}
-                <button on:click="{goConnect}" class="text-gray-500 text-sm"
-                    >连接</button>
+                <div on:click="{goConnect}" class="text-gray-500 text-sm">
+                    连接
+                </div>
             {/if}
 
-            <button class="text-gray-500 text-sm">编辑</button>
-            <button on:click="{deleteConnection}" class="text-gray-500 text-sm"
-                >删除</button>
+            <div class="text-gray-500 text-sm">编辑</div>
+            <div on:click="{deleteConnection}" class="text-gray-500 text-sm">
+                删除
+            </div>
         </div>
     {/if}
-</button>
+</div>
