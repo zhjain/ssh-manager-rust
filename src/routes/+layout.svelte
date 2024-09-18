@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { SvelteToast } from "@zerodevx/svelte-toast"
     import connectionStore from "$lib/store/connectionStore"
     import "../app.css"
     import SiderMenuItem from "$lib/components/leftNav/SiderNavItem.svelte"
@@ -20,13 +21,16 @@
     })
 
     window.addEventListener("mousedown", handleMouseEvent)
+
+    const options = {}
 </script>
 
 <div class="flex items-center justify-center w-full min-h-screen">
     <div class="flex flex-col shrink-0 w-12 h-screen border-r">
         <!-- <p>主页布局</p> -->
         {#if !!$connectionStore.current.id}
-            <SiderMenuItem href="{'/connections/' + $connectionStore.current.id}"
+            <SiderMenuItem
+                href="{'/connections/' + $connectionStore.current.id}"
                 >主页</SiderMenuItem>
         {/if}
         <SiderMenuItem href="{'/'}">连接</SiderMenuItem>
@@ -36,6 +40,8 @@
         <slot />
     </div>
 </div>
+
+<SvelteToast {options} />
 
 <style>
 </style>
