@@ -8,8 +8,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use russh::keys::*;
 use russh::*;
+use serde_json::json;
 use tokio::io::AsyncWriteExt;
 use tokio::net::ToSocketAddrs;
+
+use crate::utils::ApiResponse;
 
 // 定义全局连接池
 static CONNECTION_POOL: Lazy<Mutex<Vec<Session>>> = Lazy::new(|| Mutex::new(Vec::new()));
@@ -21,7 +24,7 @@ pub enum SshCommand {
 }
 
 #[tauri::command]
-pub async fn handle_ssh_command(command: SshCommand) -> Result<String, String> {
+pub async fn handle_ssh_command(command: SshCommand) -> Result<serde_json::Value, String> {
     match command {
         SshCommand::OpenConnection(url) => open_connection(url).await,
         SshCommand::CloseConnection(id) => close_connection(id).await,
@@ -32,39 +35,39 @@ pub async fn handle_ssh_command(command: SshCommand) -> Result<String, String> {
     }
 }
 
-async fn open_connection(url: String) -> Result<String, String> {
+async fn open_connection(url: String) -> Result<serde_json::Value, String> {
     // 解析 URL
     let parts: Vec<&str> = url.split('@').collect();
     if parts.len() != 2 {
-        return Err("无效的 URL 格式".to_string());
+        return Err("无效的 URL 格式".into());
     }
 
     let credentials: Vec<&str> = parts[0].split(':').collect();
     let address: Vec<&str> = parts[1].split(':').collect();
 
     if credentials.len() != 2 || address.len() != 2 {
-        return Err("无效的 URL 格式".to_string());
+        return Err("无效的 URL 格式".into());
     }
 
     let username = credentials[0];
     let password = credentials[1];
     let host = address[0];
-    let port: u16 = address[1].parse().map_err(|_| "无效的端口号".to_string())?;
+    let port: u16 = address[1].parse().map_err(|_| "无效的端口号")?;
 
     // 创建 SSH 连接
     let config = Arc::new(client::Config::default());
     let sh = Client {};
     let mut session = client::connect(config, (host, port), sh)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("连接失败, {}", e.to_string().split_whitespace().next().unwrap_or("未知错误")))?;
 
     let auth_res = session
         .authenticate_password(username, password)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("身份验证失败, {}", e.to_string().split_whitespace().next().unwrap_or("未知错误")))?;
 
     if !auth_res {
-        return Err("身份验证失败".to_string());
+        return Err("身份验证失败".into());
     }
 
     // 将连接添加到全局连接池
@@ -73,22 +76,22 @@ async fn open_connection(url: String) -> Result<String, String> {
 
     // 这里可以添加更多的连接管理逻辑，比如限制连接池大小、处理连接超时等
 
-    Ok(format!("连接到: {}", url))
+    Ok(json!(ApiResponse::success(format!("连接到: {}", url))))
 }
 
-async fn close_connection(id: usize) -> Result<String, String> {
+async fn close_connection(id: usize) -> Result<serde_json::Value, String> {
     // 实现关闭连接的逻辑
-    Err("尚未实现".to_string())
+    Err("关闭连接功能尚未实现".into())
 }
 
-async fn execute_query(connection_id: usize, query: String) -> Result<String, String> {
+async fn execute_query(connection_id: usize, query: String) -> Result<serde_json::Value, String> {
     // 实现执行查询的逻辑
-    Err("尚未实现".to_string())
+    Err("执行查询功能尚未实现".into())
 }
 
-async fn list_connections() -> Result<String, String> {
+async fn list_connections() -> Result<serde_json::Value, String> {
     // 实现列出所有连接的逻辑
-    Err("尚未实现".to_string())
+    Err("列出连接功能尚未实现".into())
 }
 
 struct Client {}
@@ -135,7 +138,7 @@ impl Session {
             .await?;
 
         if !auth_res {
-            anyhow::bail!("Authentication failed");
+            anyhow::bail!("身份验证失败");
         }
 
         Ok(Self { session })
@@ -190,7 +193,7 @@ impl Session {
                 _ => {}
             }
         }
-        Ok(code.expect("program did not exit cleanly"))
+        Ok(code.expect("程序未正常退出"))
     }
 
     async fn close(&mut self) -> Result<()> {
