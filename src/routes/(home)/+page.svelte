@@ -1,48 +1,109 @@
 <script lang="ts">
+    import { toast } from "@zerodevx/svelte-toast"
+    import { Loader } from "lucide-svelte"
+
+    import { goto } from "$app/navigation"
+
     import Dialog from "$lib/components/common/Dialog.svelte"
-    import { invoke } from "@tauri-apps/api/tauri"
-    import { createForm } from 'felte'
-    import { validator } from '@felte/validator-zod'
-    import { z } from "zod"
+    import connectionStore from "$lib/store/connectionStore"
+    import { invokeDbOperation, invokeSshCommand } from "$lib/utils"
 
-    import connectionStore  from "$lib/store/connectionStore"
+    function initializeForm() {
+        return {
+            name: "",
+            host: "",
+            port: 22,
+            username: "",
+            password: "",
+        }
+    }
+    let formData = initializeForm()
 
-    const schema = z.object({
-        name: z.string().min(1, { message: "连接名称不能为空" }),
-        host: z.string().min(1, { message: "主机不能为空" }),
-        port: z.number().int().min(1).max(65535).default(22),
-        username: z.string().min(1, { message: "用户名不能为空" }),
-        password: z.string().min(1, { message: "密码不能为空" }),
-    })
+    let isValid = false
+    let isLoading = false
 
-    const { form, errors, isValid } = createForm({
-        initialValues: {
-            name: '',
-            host: '',
-            port: 0,
-            username: '',
-            password: '',
-        },
-        validate: validator({ schema }),
-        onSubmit: async (values) => {
+    function validateForm() {
+        if (!formData.name) {
+            toast.push("连接失败, 连接名称不能为空")
+            return false
+        }
+        // 从store中检查名称是否已存在
+        const existingConnection = $connectionStore.all.find(
+            conn => conn.name === formData.name,
+        )
+        if (existingConnection) {
+            toast.push("连接失败, 连接名称已存在")
+            return false
+        }
+        if (!formData.host) {
+            toast.push("连接失败, 主机地址不能为空")
+            return false
+        }
+        if (!formData.port || formData.port < 1 || formData.port > 65535) {
+            toast.push("连接失败, 端口号必须是1到65535之间的整数")
+            return false
+        }
+        if (!formData.username) {
+            toast.push("连接失败, 用户名不能为空")
+            return false
+        }
+        if (!formData.password) {
+            toast.push("连接失败, 密码不能为空")
+            return false
+        }
+        return true
+    }
+
+    async function handleSubmit() {
+        isValid = validateForm()
+        if (isValid) {
+            isLoading = true
             try {
-                const res = await invoke("handle_db_operation", {
-                    operation: { Insert: values },
-                })
-                $connectionStore.update(c => ({ ...c, all: res.data }))
-                greetMsg = res
+                const command: SshCommand = {
+                    OpenConnection: `${formData.username}:${formData.password}@${formData.host}:${formData.port}`,
+                }
+                const sshRes = await invokeSshCommand<{
+                    id: number
+                    message: string
+                }>(command)
+                toast.push(sshRes.data.message)
+
+                const operation: DbOperation = {
+                    Insert: {
+                        ...formData,
+                        id: 0,
+                    },
+                }
+                const dbRes = await invokeDbOperation<Connection>(operation)
+                const connection = dbRes.data
+                await goto(`/connections/${connection.id}`)
+                $connectionStore.current = connection
+                connection.sessionId = sshRes.data.id
+                connection.connected = true
+                $connectionStore.selecting = connection
+                $connectionStore.all = [connection, ...$connectionStore.all]
                 showDialog = false
-            } catch (e) {
-                greetMsg = e as string
+                formData = {
+                    name: "",
+                    host: "",
+                    port: 22,
+                    username: "",
+                    password: "",
+                }
+            } catch (error) {
+                toast.push(error as string)
+            } finally {
+                isLoading = false
             }
-        },
-    })
+        }
+    }
 
-    let greetMsg = ""
     let showDialog = false
+
+    $: if (showDialog) {
+        formData = initializeForm()
+    }
 </script>
-
-
 
 <div class="p-4">
     <p class="w-full mb-4">主页内容</p>
@@ -54,75 +115,54 @@
 
     {#if showDialog}
         <Dialog>
-            <form
-                use:form
-                class="bg-white rounded-lg shadow-xl p-6 w-96 max-w-full">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-96 max-w-full">
                 <h2 class="text-2xl font-bold mb-6 text-gray-800">
                     创建新SSH连接
                 </h2>
                 <div class="mb-4">
+                    <span class="block text-sm font-medium text-gray-700 mb-1"
+                        >连接名称</span>
                     <input
-                        class="form-input w-full {$errors.name
-                            ? 'border-red-500'
-                            : ''}"
+                        class="form-input"
                         type="text"
-                        name="name"
-                        placeholder="连接名称" />
-                    {#if $errors.name}
-                        <p class="text-red-500 text-sm mt-1">{$errors.name[0]}</p>
-                    {/if}
+                        bind:value="{formData.name}"
+                        placeholder="请输入连接名称" />
                 </div>
                 <div class="mb-4">
+                    <strong class="block text-sm font-medium text-gray-700 mb-1"
+                        >主机</strong>
                     <input
-                        class="form-input w-full {$errors.host
-                            ? 'border-red-500'
-                            : ''}"
+                        class="form-input"
                         type="text"
-                        name="host"
-                        placeholder="主机" />
-                    {#if $errors.host}
-                        <p class="text-red-500 text-sm mt-1">{$errors.host[0]}</p>
-                    {/if}
+                        bind:value="{formData.host}"
+                        placeholder="请输入主机地址" />
                 </div>
                 <div class="mb-4">
+                    <em class="block text-sm font-medium text-gray-700 mb-1"
+                        >端口</em>
                     <input
-                        class="form-input w-full {$errors.port
-                            ? 'border-red-500'
-                            : ''}"
+                        class="form-input"
                         type="number"
-                        name="port"
-                        placeholder="端口" />
-                    {#if $errors.port}
-                        <p class="text-red-500 text-sm mt-1">{$errors.port[0]}</p>
-                    {/if}
+                        bind:value="{formData.port}"
+                        placeholder="请输入端口号" />
                 </div>
                 <div class="mb-4">
+                    <b class="block text-sm font-medium text-gray-700 mb-1"
+                        >用户名</b>
                     <input
-                        class="form-input w-full {$errors.username
-                            ? 'border-red-500'
-                            : ''}"
+                        class="form-input"
                         type="text"
-                        name="username"
-                        placeholder="用户名" />
-                    {#if $errors.username}
-                        <p class="text-red-500 text-sm mt-1">
-                            {$errors.username[0]}
-                        </p>
-                    {/if}
+                        bind:value="{formData.username}"
+                        placeholder="请输入用户名" />
                 </div>
                 <div class="mb-4">
+                    <i class="block text-sm font-medium text-gray-700 mb-1"
+                        >密码</i>
                     <input
-                        class="form-input w-full {$errors.password
-                            ? 'border-red-500'
-                            : ''}"
+                        class="form-input"
                         type="password"
-                        name="password"
-                        placeholder="密码" />
-                    {#if $errors.password}
-                        <p class="text-red-500 text-sm mt-1">
-                            {$errors.password[0]}
-                        </p>
-                    {/if}
+                        bind:value="{formData.password}"
+                        placeholder="请输入密码" />
                 </div>
                 <div class="flex justify-end space-x-3 mt-6">
                     <button
@@ -132,18 +172,18 @@
                         取消
                     </button>
                     <button
-                        type="submit"
-                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-                        disabled="{!$isValid}">
+                        on:click="{handleSubmit}"
+                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center justify-center"
+                        class:cursor-not-allowed="{isLoading}"
+                        disabled="{isLoading}">
+                        {#if isLoading}
+                            <Loader class="animate-spin mr-2" size="{18}" />
+                        {/if}
                         创建连接
                     </button>
                 </div>
-            </form>
+            </div>
         </Dialog>
-    {/if}
-
-    {#if greetMsg}
-        <p class="mt-4 text-green-600">{greetMsg}</p>
     {/if}
 </div>
 
