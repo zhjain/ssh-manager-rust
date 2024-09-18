@@ -6,6 +6,7 @@ interface Connection {
     username?: string
     password?: string
     connected?: boolean
+    sessionId?: number
 }
 
 interface Response<T> {

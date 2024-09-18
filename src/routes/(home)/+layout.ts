@@ -5,7 +5,6 @@ import { invokeDbOperation } from '$lib/utils'
 
 export async function load() {
     const cachedConnections = get(connectionStore)
-
     if (cachedConnections.all.length > 0) {
         // 如果有缓存的数据，直接返回
         return { list: cachedConnections.all }
