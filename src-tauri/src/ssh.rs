@@ -15,7 +15,9 @@ use tokio::net::ToSocketAddrs;
 use crate::utils::ApiResponse;
 
 // 定义全局连接池
-static CONNECTION_POOL: Lazy<Mutex<Vec<Session>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static CONNECTION_POOL: Lazy<Mutex<Vec<(usize, Session)>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static NEXT_ID: Lazy<Mutex<usize>> = Lazy::new(|| Mutex::new(0));
+
 #[derive(Debug, serde::Deserialize)]
 pub enum SshCommand {
     OpenConnection(String),
@@ -25,6 +27,7 @@ pub enum SshCommand {
 
 #[tauri::command]
 pub async fn handle_ssh_command(command: SshCommand) -> Result<serde_json::Value, String> {
+    println!("Received command: {:?}", command);
     match command {
         SshCommand::OpenConnection(url) => open_connection(url).await,
         SshCommand::CloseConnection(id) => close_connection(id).await,
@@ -59,39 +62,80 @@ async fn open_connection(url: String) -> Result<serde_json::Value, String> {
     let sh = Client {};
     let mut session = client::connect(config, (host, port), sh)
         .await
-        .map_err(|e| format!("连接失败, {}", e.to_string().split_whitespace().next().unwrap_or("未知错误")))?;
+        .map_err(|e| {
+            format!(
+                "连接失败, {}",
+                e.to_string()
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("未知错误")
+            )
+        })?;
 
     let auth_res = session
         .authenticate_password(username, password)
         .await
-        .map_err(|e| format!("身份验证失败, {}", e.to_string().split_whitespace().next().unwrap_or("未知错误")))?;
+        .map_err(|e| {
+            format!(
+                "身份验证失败, {}",
+                e.to_string()
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("未知错误")
+            )
+        })?;
 
     if !auth_res {
         return Err("身份验证失败".into());
     }
 
+    // 生成新的连接ID
+    let id = {
+        let mut next_id = NEXT_ID.lock().unwrap();
+        *next_id += 1;
+        *next_id
+    };
+
     // 将连接添加到全局连接池
     let new_session = Session { session };
-    CONNECTION_POOL.lock().unwrap().push(new_session);
+    CONNECTION_POOL.lock().unwrap().push((id, new_session));
 
     // 这里可以添加更多的连接管理逻辑，比如限制连接池大小、处理连接超时等
 
-    Ok(json!(ApiResponse::success(format!("连接到: {}", url))))
+    Ok(json!(ApiResponse::success(json!({
+        "id": id,
+        "message": format!("连接到: {}", parts[1])
+    }))))
 }
 
 async fn close_connection(id: usize) -> Result<serde_json::Value, String> {
-    // 实现关闭连接的逻辑
-    Err("关闭连接功能尚未实现".into())
+    let mut pool = CONNECTION_POOL.lock().unwrap();
+    if let Some(index) = pool.iter().position(|(conn_id, _)| *conn_id == id) {
+        pool.remove(index);
+        Ok(json!(ApiResponse::success(format!(
+            "已关闭连接 ID: {}",
+            id
+        ))))
+    } else {
+        Err(format!("未找到 ID 为 {} 的连接", id))
+    }
 }
 
 async fn execute_query(connection_id: usize, query: String) -> Result<serde_json::Value, String> {
-    // 实现执行查询的逻辑
-    Err("执行查询功能尚未实现".into())
+    let pool = CONNECTION_POOL.lock().unwrap();
+    if let Some((_, session)) = pool.iter().find(|(id, _)| *id == connection_id) {
+        // 这里实现执行查询的逻辑
+        // 注意：这里需要修改 Session 结构体，添加执行查询的方法
+        Err("执行查询功能尚未实现".into())
+    } else {
+        Err(format!("未找到 ID 为 {} 的连接", connection_id))
+    }
 }
 
 async fn list_connections() -> Result<serde_json::Value, String> {
-    // 实现列出所有连接的逻辑
-    Err("列出连接功能尚未实现".into())
+    let pool = CONNECTION_POOL.lock().unwrap();
+    let connections: Vec<usize> = pool.iter().map(|(id, _)| *id).collect();
+    Ok(json!(ApiResponse::success(connections)))
 }
 
 struct Client {}
