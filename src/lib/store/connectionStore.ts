@@ -5,6 +5,7 @@ interface ConnectionStore {
     connected: Connection[]
     selecting: Connection
     current: Connection
+    serverStatus: Record<number, ServerStatus>
 }
 
 const connectionStore = writable<ConnectionStore>({
@@ -12,6 +13,7 @@ const connectionStore = writable<ConnectionStore>({
     connected: [],
     selecting: {} as Connection,
     current: {} as Connection,
+    serverStatus: {},
 })
 
 export default connectionStore
