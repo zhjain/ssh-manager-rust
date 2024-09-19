@@ -1,6 +1,7 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <script lang="ts">
     import { goto } from "$app/navigation"
+    import { Unplug, Settings, Trash2, Link2, Server } from "lucide-svelte"
     import { toast } from "@zerodevx/svelte-toast"
 
     import connectionStore from "$lib/store/connectionStore"
@@ -23,14 +24,17 @@
         } else {
             try {
                 const command: SshCommand = {
-                    OpenConnection: `${connection.username}:${connection.password}@${connection.host}:${connection.port}`,
+                    OpenConnection: {
+                        id: connection.id,
+                        url: `${connection.username}:${connection.password}@${connection.host}:${connection.port}`,
+                    },
                 }
-                const sshRes = await invokeSshCommand<{
+                await invokeSshCommand<{
                     id: number
                     message: string
                 }>(command)
                 $connectionStore.current = connection
-                connection.sessionId = sshRes.data.id
+                $connectionStore.connected.push(connection)
                 await goto(`/connections/${connection.id}`)
                 connection.connected = true
             } catch (error) {
@@ -42,14 +46,17 @@
     async function disConnect() {
         try {
             const command: SshCommand = {
-                CloseConnection: connection.sessionId!,
+                CloseConnection: connection.id!,
             }
             await invokeSshCommand<{
                 id: number
                 message: string
             }>(command)
             connection.connected = false
-            connection.sessionId = undefined
+            // 从store的connected数组中移除断开的连接
+            $connectionStore.connected = $connectionStore.connected.filter(
+                conn => conn.id !== connection.id,
+            )
         } catch (error) {
             toast.push(`断开连接失败: ${(error as Error).message}`)
         }
@@ -63,14 +70,13 @@
         if (connected) {
             try {
                 const command: SshCommand = {
-                    CloseConnection: connection.sessionId!,
+                    CloseConnection: connection.id!,
                 }
                 await invokeSshCommand<{
                     id: number
                     message: string
                 }>(command)
                 connection.connected = false
-                connection.sessionId = undefined
             } catch (error) {
                 toast.push(`断开连接失败: ${(error as Error).message}`)
                 return
@@ -149,37 +155,36 @@
     on:click="{setCurrent}"
     on:dblclick="{goConnect}"
     class="{cn(
-        'flex flex-row w-full justify-between cursor-pointer items-center px-4',
+        'flex flex-row justify-between cursor-pointer items-center rounded mx-1 pr-2 pl-4 py-1',
         {
-            'bg-red-200 transition-all': isCurrent,
+            'bg-red-100 transition-all': isCurrent,
         },
     )}">
-    <div class="flex gap-2 items-center">
-        <div
-            class="{cn(
-                'w-8 h-8 my-2 rounded-full',
-                connected ? 'bg-red-400' : 'bg-gray-200',
-            )}">
+    <div class="flex gap-2 items-center flex-grow min-w-0">
+        <div class="{connected ? 'text-red-500' : 'text-gray-600'}">
+            <Server size="{18}" />
         </div>
-        <div class="text-lg font-bold">{connection.name}</div>
+        <div class="text-sm truncate overflow-hidden">
+            {connection.name}
+        </div>
     </div>
     {#if isCurrent}
-        <div class="flex gap-2 items-center">
+        <div class="flex h-full gap-1 items-center flex-shrink-0">
             {#if connection.connected}
-                <div on:click="{disConnect}" class="text-gray-500 text-sm">
-                    断开
+                <div on:click="{disConnect}" title="断开连接" class="conn-icon">
+                    <Link2 size="{18}" />
                 </div>
             {:else}
-                <div on:click="{goConnect}" class="text-gray-500 text-sm">
-                    连接
+                <div on:click="{goConnect}" title="连接" class="conn-icon">
+                    <Unplug size="{18}" />
                 </div>
             {/if}
 
-            <div on:click="{openEditDialog}" class="text-gray-500 text-sm">
-                编辑
+            <div on:click="{openEditDialog}" title="编辑" class="conn-icon">
+                <Settings size="{18}" />
             </div>
-            <div on:click="{deleteConnection}" class="text-gray-500 text-sm">
-                删除
+            <div on:click="{deleteConnection}" title="删除" class="conn-icon">
+                <Trash2 size="{18}" />
             </div>
         </div>
     {/if}
