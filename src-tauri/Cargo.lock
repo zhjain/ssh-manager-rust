@@ -3424,6 +3424,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "once_cell",
+ "parking_lot 0.12.3",
  "russh",
  "russh-config",
  "serde",
