@@ -3,7 +3,7 @@
     import { cn } from "$lib/utils"
 </script>
 
-<div class="{cn('flex h-screen')}">
+<div class="{cn('flex h-full')}">
     <ConnectionList />
     <div>
         <slot />
