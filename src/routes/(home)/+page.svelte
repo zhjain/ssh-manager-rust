@@ -6,7 +6,7 @@
 
     import Dialog from "$lib/components/common/Dialog.svelte"
     import connectionStore from "$lib/store/connectionStore"
-    import { invokeDbOperation, invokeSshCommand } from "$lib/utils"
+    import { invokeDbOperation } from "$lib/utils"
 
     function initializeForm() {
         return {
@@ -24,7 +24,7 @@
 
     function validateForm() {
         if (!formData.name) {
-            toast.push("连接失败, 连接名称不能为空")
+            toast.push("创建失败, 连接名称不能为空")
             return false
         }
         // 从store中检查名称是否已存在
@@ -32,23 +32,23 @@
             conn => conn.name === formData.name,
         )
         if (existingConnection) {
-            toast.push("连接失败, 连接名称已存在")
+            toast.push("创建失败, 连接名称已存在")
             return false
         }
         if (!formData.host) {
-            toast.push("连接失败, 主机地址不能为空")
+            toast.push("创建失败, 主机地址不能为空")
             return false
         }
         if (!formData.port || formData.port < 1 || formData.port > 65535) {
-            toast.push("连接失败, 端口号必须是1到65535之间的整数")
+            toast.push("创建失败, 端口号必须是1到65535之间的整数")
             return false
         }
         if (!formData.username) {
-            toast.push("连接失败, 用户名不能为空")
+            toast.push("创建失败, 用户名不能为空")
             return false
         }
         if (!formData.password) {
-            toast.push("连接失败, 密码不能为空")
+            toast.push("创建失败, 密码不能为空")
             return false
         }
         return true
@@ -59,15 +59,6 @@
         if (isValid) {
             isLoading = true
             try {
-                const command: SshCommand = {
-                    OpenConnection: `${formData.username}:${formData.password}@${formData.host}:${formData.port}`,
-                }
-                const sshRes = await invokeSshCommand<{
-                    id: number
-                    message: string
-                }>(command)
-                toast.push(sshRes.data.message)
-
                 const operation: DbOperation = {
                     Insert: {
                         ...formData,
@@ -76,20 +67,10 @@
                 }
                 const dbRes = await invokeDbOperation<Connection>(operation)
                 const connection = dbRes.data
-                await goto(`/connections/${connection.id}`)
-                $connectionStore.current = connection
-                connection.sessionId = sshRes.data.id
-                connection.connected = true
-                $connectionStore.selecting = connection
+                toast.push("新连接创建成功")
                 $connectionStore.all = [connection, ...$connectionStore.all]
                 showDialog = false
-                formData = {
-                    name: "",
-                    host: "",
-                    port: 22,
-                    username: "",
-                    password: "",
-                }
+                formData = initializeForm()
             } catch (error) {
                 toast.push(error as string)
             } finally {
