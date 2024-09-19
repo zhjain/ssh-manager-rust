@@ -2,6 +2,8 @@
 
 这是一个基于Tauri、SvelteKit和TypeScript构建的SSH连接管理工具。
 
+> 注意：本README由AI自动生成，仅供参考。实际项目信息可能有所不同，请以实际代码和文档为准。
+
 ## 功能特点
 
 - 创建和管理SSH连接
