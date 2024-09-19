@@ -1,5 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use dirs;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sled::{self, Db};
@@ -56,7 +57,9 @@ pub enum DbOperation {
 #[tauri::command]
 pub async fn handle_db_operation(operation: DbOperation) -> Result<serde_json::Value, String> {
     println!("Received operation: {:?}", operation); // 打印操作类型
-    let db: Db = sled::open("sled_db/connections_db").map_err(|e| e.to_string())?;
+    let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
+    let db_path = home_dir.join(".ssh-rust").join("connections_db");
+    let db: Db = sled::open(db_path).map_err(|e| e.to_string())?;
 
     match operation {
         DbOperation::Insert(mut connection) => save_connection(&db, &mut connection),
