@@ -11,29 +11,31 @@ use crate::utils::ApiResponse;
 
 // 定义全局连接池
 static CONNECTION_POOL: Lazy<Mutex<Vec<(usize, Session)>>> = Lazy::new(|| Mutex::new(Vec::new()));
-static NEXT_ID: Lazy<Mutex<usize>> = Lazy::new(|| Mutex::new(0));
 
 #[derive(Debug, serde::Deserialize)]
 pub enum SshCommand {
-    OpenConnection(String),
+    OpenConnection { id: usize, url: String },
     CloseConnection(usize),
-    ExecuteQuery { connection_id: usize, query: String },
+    ExecuteQuery { id: usize, query: String },
 }
 
 #[tauri::command]
 pub async fn handle_ssh_command(command: SshCommand) -> Result<serde_json::Value, String> {
     println!("Received command: {:?}", command);
     match command {
-        SshCommand::OpenConnection(url) => open_connection(url).await,
+        SshCommand::OpenConnection { id, url } => open_connection(id, url).await,
         SshCommand::CloseConnection(id) => close_connection(id).await,
-        SshCommand::ExecuteQuery {
-            connection_id,
-            query,
-        } => execute_query(connection_id, query).await,
+        SshCommand::ExecuteQuery { id, query } => {
+            if query == "baseinfo" {
+                query_server_info(id).await
+            } else {
+                execute_query(id, query).await
+            }
+        }
     }
 }
 
-async fn open_connection(url: String) -> Result<serde_json::Value, String> {
+async fn open_connection(id: usize, url: String) -> Result<serde_json::Value, String> {
     // 解析 URL
     let parts: Vec<&str> = url.split('@').collect();
     if parts.len() != 2 {
@@ -83,13 +85,6 @@ async fn open_connection(url: String) -> Result<serde_json::Value, String> {
         return Err("身份验证失败".into());
     }
 
-    // 生成新的连接ID
-    let id = {
-        let mut next_id = NEXT_ID.lock().await;
-        *next_id += 1;
-        *next_id
-    };
-
     // 将连接添加到全局连接池
     let new_session = Session { session };
     CONNECTION_POOL.lock().await.push((id, new_session));
@@ -129,7 +124,7 @@ async fn query_server_info(connection_id: usize) -> Result<serde_json::Value, St
     let pool = CONNECTION_POOL.lock().await;
     if let Some((_, session)) = pool.iter().find(|(id, _)| *id == connection_id) {
         let uptime = session.call("uptime").await.map_err(|e| e.to_string())?;
-        let memory = session.call("free -m").await.map_err(|e| e.to_string())?;
+        let memory_usage = session.call("free -m").await.map_err(|e| e.to_string())?;
         let cpu_usage = session
             .call("top -bn1 | grep 'Cpu(s)'")
             .await
@@ -137,7 +132,7 @@ async fn query_server_info(connection_id: usize) -> Result<serde_json::Value, St
 
         Ok(json!(ApiResponse::success(json!({
             "uptime": uptime,
-            "memory": memory,
+            "memory_usage": memory_usage,
             "cpu_usage": cpu_usage
         }))))
     } else {
