@@ -3,19 +3,29 @@
     import connectionStore from "$lib/store/connectionStore"
     // 获取路由参数
     let { id } = $page.params
+
+    import { onMount } from "svelte"
+    import type { PageData } from "./$types"
+
+    export let data: PageData
+
+    let connectionStatus: {
+        status: string
+        uptime: string
+        cpu_usage: number
+        memory_usage: number
+    } | null = null
+
+    let error: string | null = null
+
+    onMount(() => {
+        connectionStatus = data.connectionStatus
+        error = data.error
+    })
 </script>
 
-<p class="flex w-full items-center justify-center">主页内容</p>
-{id}
-{#each $connectionStore.all as connection}
-    {#if connection.connected}
-        <p
-            class="flex w-full items-center justify-center"
-            class:text-red-500="{connection.id === parseInt(id)}">
-            {connection.name}
-        </p>
-    {/if}
-{/each}
+{connectionStatus}
+{error}
 
 <style>
 </style>
