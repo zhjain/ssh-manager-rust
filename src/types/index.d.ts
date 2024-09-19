@@ -6,7 +6,13 @@ interface Connection {
     username?: string
     password?: string
     connected?: boolean
-    sessionId?: number
+}
+
+interface ServerStatus {
+    status: string
+    uptime: string
+    cpu_usage: number
+    memory_usage: number
 }
 
 interface Response<T> {
@@ -19,7 +25,10 @@ interface Response<T> {
 type SshCommandResult<T> = Response<T>
 
 type OpenConnectionCommand = {
-    OpenConnection: string
+    OpenConnection: {
+        id: number
+        url: string
+    }
 }
 
 type CloseConnectionCommand = {
@@ -28,7 +37,7 @@ type CloseConnectionCommand = {
 
 type ExecuteQueryCommand = {
     ExecuteQuery: {
-        connection_id: number
+        id: number
         query: string
     }
 }

@@ -8,29 +8,31 @@ import connectionStore from '$lib/store/connectionStore'
 export const load: PageLoad = async () => {
     try {
         const cachedConnections = get(connectionStore)
-        if (
-            !cachedConnections.current ||
-            !cachedConnections.current.sessionId
-        ) {
+        if (cachedConnections.serverStatus[cachedConnections.current.id])
+            return {
+                connectionStatus:
+                    cachedConnections.serverStatus[
+                        cachedConnections.current.id
+                    ],
+                error: null,
+            }
+        if (!cachedConnections.current || !cachedConnections.current.id) {
             throw new Error('无效的连接或会话ID')
         }
         const command: SshCommand = {
             ExecuteQuery: {
-                connection_id: cachedConnections.current.sessionId,
+                id: cachedConnections.current.id,
                 // query: "uptime && free -m && top -bn1 | grep 'Cpu(s)'",
-                query: 'ls',
+                query: 'baseinfo',
             },
         }
 
-        const response = await invokeSshCommand<{
-            status: string
-            uptime: string
-            cpu_usage: number
-            memory_usage: number
-        }>(command)
-
+        const response = await invokeSshCommand<ServerStatus>(command)
+        cachedConnections.serverStatus[cachedConnections.current.id] =
+            response.data
         return {
             connectionStatus: response.data,
+            error: null,
         }
     } catch {
         return {
