@@ -1,4 +1,7 @@
 <script lang="ts">
+    import { invoke } from "@tauri-apps/api/tauri"
+    import { goto } from "$app/navigation"
+    import connectionStore from "$lib/store/connectionStore"
     import { Minus, Square, X } from "lucide-svelte"
     import { appWindow } from "@tauri-apps/api/window"
     // 监听用户的输入方式（键盘或鼠标）
@@ -20,13 +23,30 @@
     window.addEventListener("mousedown", handleMouseEvent)
 
     window.addEventListener("keydown", function (e) {
-        // 禁用 F5 刷新
-        if (e.key === "F5") {
-            e.preventDefault()
-        }
-        // 禁用 Ctrl+R 或 Command+R 刷新
-        if ((e.ctrlKey || e.metaKey) && e.key === "r") {
-            e.preventDefault()
+        if (import.meta.env.DEV) {
+            if (e.key === "F11") {
+                e.preventDefault()
+                invoke("handle_ssh_command", {
+                    command: { CloseAllConnections: null },
+                })
+                $connectionStore.all.forEach(connection => {
+                    connection.connected = false
+                })
+                $connectionStore.current = {} as Connection
+                $connectionStore.serverStatus = {}
+                $connectionStore.selecting = {} as Connection
+                $connectionStore.connected = []
+                goto("/")
+            }
+        } else {
+            // 禁用 F5 刷新
+            if (e.key === "F5") {
+                e.preventDefault()
+            }
+            // 禁用 Ctrl+R 或 Command+R 刷新
+            if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+                e.preventDefault()
+            }
         }
         // 禁用 Ctrl+Shift+P
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "P") {
