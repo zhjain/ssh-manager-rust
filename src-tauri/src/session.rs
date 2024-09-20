@@ -6,10 +6,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use russh::client::{self, Handle};
 use russh::keys::*;
-
-use russh::*;
-use tokio::io::AsyncWriteExt;
+use tauri::Window;
 use tokio::net::ToSocketAddrs;
+use tokio::task::JoinHandle;
+use tokio::time::interval;
 
 pub struct Client {}
 
@@ -28,6 +28,7 @@ impl client::Handler for Client {
 /// 这个结构体是russh客户端的便捷包装
 pub struct Session {
     pub session: Handle<Client>,
+    pub info_task: Option<JoinHandle<()>>,
 }
 
 impl Session {
@@ -55,7 +56,10 @@ impl Session {
             anyhow::bail!("身份验证失败");
         }
 
-        Ok(Self { session })
+        Ok(Self {
+            session,
+            info_task: None,
+        })
     }
 
     /// 使用用户名和密码连接到服务器
@@ -79,7 +83,10 @@ impl Session {
             anyhow::bail!("密码认证失败");
         }
 
-        Ok(Self { session })
+        Ok(Self {
+            session,
+            info_task: None,
+        })
     }
 
     /// 在服务器上执行命令
@@ -89,16 +96,13 @@ impl Session {
 
         let mut output = String::new();
         loop {
-            // 会话通道上有可用事件
             let Some(msg) = channel.wait().await else {
                 break;
             };
             match msg {
-                // 将数据追加到输出字符串
                 russh::ChannelMsg::Data { ref data } => {
                     output.push_str(&String::from_utf8_lossy(data));
                 }
-                // 命令已返回退出代码
                 russh::ChannelMsg::ExitStatus { exit_status } => {
                     if exit_status != 0 {
                         anyhow::bail!("命令返回非零退出状态");
@@ -113,10 +117,27 @@ impl Session {
 
     /// 关闭会话
     pub async fn close(&mut self) -> Result<()> {
+        if let Some(task) = self.info_task.take() {
+            task.abort();
+        }
         self.session
             .disconnect(russh::Disconnect::ByApplication, "", "English")
             .await?;
         Ok(())
+    }
+
+    async fn exec_command(session: &Handle<Client>, command: &str) -> Result<String> {
+        let mut channel = session.channel_open_session().await?;
+        channel.exec(true, command).await?;
+
+        let mut output = String::new();
+        while let Some(msg) = channel.wait().await {
+            if let russh::ChannelMsg::Data { ref data } = msg {
+                output.push_str(&String::from_utf8_lossy(data));
+            }
+        }
+
+        Ok(output)
     }
 }
 
