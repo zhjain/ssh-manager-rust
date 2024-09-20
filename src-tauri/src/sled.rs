@@ -56,7 +56,7 @@ pub enum DbOperation {
 
 #[tauri::command]
 pub async fn handle_db_operation(operation: DbOperation) -> Result<serde_json::Value, String> {
-    println!("Received operation: {:?}", operation); // 打印操作类型
+    println!("Received db operation: {:?}", operation); // 打印操作类型
     let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
     let db_path = home_dir.join(".ssh-rust").join("connections_db");
     let db: Db = sled::open(db_path).map_err(|e| e.to_string())?;
