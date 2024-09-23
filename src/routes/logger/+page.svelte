@@ -1,104 +1,144 @@
 <script lang="ts">
     import { onMount } from "svelte"
-    import ApexCharts from "apexcharts" // 使用原生 ApexCharts
+    import Chart from "chart.js/auto"
+    import type { ChartConfiguration, InteractionModeMap } from "chart.js"
 
-    let chart: ApexCharts | null = null // 用于存储图表实例
+    let chartContainer: HTMLCanvasElement
+    let chart: Chart
 
-    // 图表初始配置
-    let chartOptions = {
-        chart: {
-            type: "line",
-            height: 350,
-            animations: {
-                enabled: true,
-                easing: "linear",
-                dynamicAnimation: {
-                    speed: 1000,
-                    // enabled: false,
-                },
-                // animateGradually: {
-                //     enabled: true,
-                //     delay: 150,
-                // },
-            },
-            toolbar: {
-                show: false,
-            },
-            zoom: {
-                enabled: false,
-            },
-        },
-        series: [
+    const maxDataPoints = 100
+    let lastCpuUsage = 50 // 初始值设为50
+
+    const chartData = {
+        labels: Array.from({ length: maxDataPoints }, (_, i) => i.toString()),
+        datasets: [
             {
-                name: "CPU Usage",
-                data: [] as { x: number; y: number }[],
+                data: Array(maxDataPoints).fill(null),
+                backgroundColor: "rgb(0, 123, 255)", // 使用不透明的颜色
+                borderWidth: 0,
+                barPercentage: 1,
+                categoryPercentage: 1,
             },
         ],
-        xaxis: {
-            type: "numeric",
-            range: 10, // 显示 10 个数据点
-            tickAmount: 10,
+    }
+
+    const chartOptions: ChartConfiguration<"bar">["options"] = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 0,
         },
-        yaxis: {
-            max: 100,
-            min: 0,
+        scales: {
+            x: {
+                type: "linear" as const,
+                position: "bottom" as const,
+                min: 0,
+                max: maxDataPoints - 1,
+                grid: {
+                    display: false,
+                },
+                ticks: {
+                    display: false, // 隐藏X轴刻度
+                },
+            },
+            y: {
+                type: "linear" as const,
+                position: "left" as const,
+                min: 0,
+                max: 100,
+                grid: {
+                    display: true,
+                    color: (context: { tick: { value: number } }) => {
+                        if (context.tick.value % 25 === 0) {
+                            return "rgba(0, 0, 0, 0.1)" // 点状线颜色
+                        }
+                        return "rgba(0, 0, 0, 0)"
+                    },
+                    lineWidth: 1,
+                    drawTicks: false,
+                    tickBorderDash: [2, 5], // 设置点状线样式
+                    z: 1,
+                },
+                ticks: {
+                    display: true, // 显示Y轴刻度
+                    callback: (value: number | string) => {
+                        const numValue = Number(value)
+                        if (
+                            numValue === 0 ||
+                            numValue === 25 ||
+                            numValue === 50 ||
+                            numValue === 75 ||
+                            numValue === 100
+                        ) {
+                            return numValue.toString()
+                        }
+                        return ""
+                    },
+                },
+            },
+        },
+        plugins: {
+            legend: {
+                display: false,
+            },
+            tooltip: {
+                enabled: false, // 禁用工具提示以去除悬停效果
+            },
+        },
+        elements: {
+            bar: {
+                borderSkipped: false,
+            },
+        },
+        hover: {
+            mode: undefined, // 禁用悬停模式
         },
     }
 
-    let lastTime = 0
-
-    // 随机生成 CPU 使用率
-    const getRandomCpuUsage = (): number => {
-        return Math.floor(Math.random() * 100)
+    // 生成新的 CPU 使用率
+    const getNextCpuUsage = (): number => {
+        const change = Math.floor(Math.random() * 21) - 10 // 生成-10到10之间的随机数
+        let newUsage = lastCpuUsage + change
+        newUsage = Math.max(0, Math.min(100, newUsage)) // 确保值在0到100之间
+        lastCpuUsage = newUsage
+        return newUsage
     }
 
     // 添加新的数据点
     const addNewDataPoint = (): void => {
-        lastTime += 1
+        const newData = getNextCpuUsage()
+        chartData.datasets[0].data.push(newData)
 
-        const newData = {
-            x: lastTime,
-            y: getRandomCpuUsage(),
+        if (chartData.datasets[0].data.length > maxDataPoints) {
+            chartData.datasets[0].data.shift()
         }
 
-        if (chart) {
-            // 更新图表数据
-            chart.appendData([
-                {
-                    // name: "CPU Usage",
-                    data: [newData],
-                },
-            ])
-            // console.log(chartOptions.series[0].data.length)
-        }
+        chart.update()
     }
 
     onMount(() => {
-        // 初始化图表
-        const chartElement = document.querySelector("#cpu-chart") as HTMLElement
-        chart = new ApexCharts(chartElement, chartOptions)
-        chart.render()
+        chart = new Chart(chartContainer, {
+            type: "bar",
+            data: chartData,
+            options: chartOptions,
+        })
 
-        // 每秒添加数据点
-        const interval = setInterval(addNewDataPoint, 1000)
+        // 每0.3秒添加数据点
+        const interval = setInterval(addNewDataPoint, 300)
 
         // 在组件卸载时清除定时器
         return () => {
             clearInterval(interval)
-            if (chart) {
-                chart.destroy() // 销毁图表实例
-            }
+            chart.destroy()
         }
     })
 </script>
 
 <!-- HTML 模板 -->
-<div id="cpu-chart"></div>
+<div class="w-full max-w-2xl mx-auto mt-8 h-64">
+    <canvas bind:this="{chartContainer}"></canvas>
+</div>
 
 <style>
-    /* 样式可以根据需求调整 */
-    #cpu-chart {
-        max-width: 100%;
-        margin: 0 auto;
-    }
+    /* 可以添加额外的样式，如果需要的话 */
 </style>
