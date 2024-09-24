@@ -1,3 +1,4 @@
 import ConnectionList from './connectionList/index.svelte'
+import NetworkSpeedChart from './connectionDetails/NetworkSpeedChart.svelte'
 
-export { ConnectionList }
+export { ConnectionList, NetworkSpeedChart }
