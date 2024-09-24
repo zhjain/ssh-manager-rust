@@ -13,6 +13,15 @@ interface ServerStatus {
     uptime: string
     cpu_usage: number
     memory_usage: number
+    memory_usages?: number[]
+    upload_speed: number
+    download_speed: number
+    uploadSpeedHistory?: number[]
+    downloadSpeedHistory?: number[]
+    network_usage: {
+        rx_speed: number
+        tx_speed: number
+    }
 }
 
 interface Response<T> {

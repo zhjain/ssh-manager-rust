@@ -1,142 +1,63 @@
 <script lang="ts">
+    import BarChartLogger from "$lib/components/barChartLogger/index.svelte"
     import { onMount } from "svelte"
-    import Chart from "chart.js/auto"
-    import type { ChartConfiguration, InteractionModeMap } from "chart.js"
 
-    let chartContainer: HTMLCanvasElement
-    let chart: Chart
+    let maxDataPoints = 100
+    let uploadData: number[] = []
+    let downloadData: number[] = []
 
-    const maxDataPoints = 100
-    let lastCpuUsage = 50 // 初始值设为50
-
-    const chartData = {
-        labels: Array.from({ length: maxDataPoints }, (_, i) => i.toString()),
-        datasets: [
-            {
-                data: Array(maxDataPoints).fill(null),
-                backgroundColor: "rgb(0, 123, 255)", // 使用不透明的颜色
-                borderWidth: 0,
-                barPercentage: 1,
-                categoryPercentage: 1,
-            },
-        ],
+    function generateSmoothData(
+        prevValue: number,
+        min: number,
+        max: number,
+    ): number {
+        const maxChange = 5 // 最大变化幅度
+        const change = Math.random() * maxChange * 2 - maxChange
+        let newValue = prevValue + change
+        newValue = Math.max(min, Math.min(max, newValue)) // 确保值在范围内
+        return Number(newValue.toFixed(2)) // 保留两位小数
     }
 
-    const chartOptions: ChartConfiguration<"bar">["options"] = {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-            duration: 0,
-        },
-        scales: {
-            x: {
-                type: "linear" as const,
-                position: "bottom" as const,
-                min: 0,
-                max: maxDataPoints - 1,
-                grid: {
-                    display: false,
-                },
-                ticks: {
-                    display: false, // 隐藏X轴刻度
-                },
-            },
-            y: {
-                type: "linear" as const,
-                position: "left" as const,
-                min: 0,
-                max: 100,
-                grid: {
-                    display: true,
-                    color: (context: { tick: { value: number } }) => {
-                        if (context.tick.value % 25 === 0) {
-                            return "rgba(0, 0, 0, 0.1)" // 点状线颜色
-                        }
-                        return "rgba(0, 0, 0, 0)"
-                    },
-                    lineWidth: 1,
-                    drawTicks: false,
-                    tickBorderDash: [2, 5], // 设置点状线样式
-                    z: 1,
-                },
-                ticks: {
-                    display: true, // 显示Y轴刻度
-                    callback: (value: number | string) => {
-                        const numValue = Number(value)
-                        if (
-                            numValue === 0 ||
-                            numValue === 25 ||
-                            numValue === 50 ||
-                            numValue === 75 ||
-                            numValue === 100
-                        ) {
-                            return numValue.toString()
-                        }
-                        return ""
-                    },
-                },
-            },
-        },
-        plugins: {
-            legend: {
-                display: false,
-            },
-            tooltip: {
-                enabled: false, // 禁用工具提示以去除悬停效果
-            },
-        },
-        elements: {
-            bar: {
-                borderSkipped: false,
-            },
-        },
-        hover: {
-            mode: undefined, // 禁用悬停模式
-        },
-    }
+    function simulateDataUpdate() {
+        const lastUploadValue =
+            uploadData.length > 0 ? uploadData[uploadData.length - 1] : 20
+        const lastDownloadValue =
+            downloadData.length > 0 ? downloadData[downloadData.length - 1] : 50
 
-    // 生成新的 CPU 使用率
-    const getNextCpuUsage = (): number => {
-        const change = Math.floor(Math.random() * 21) - 10 // 生成-10到10之间的随机数
-        let newUsage = lastCpuUsage + change
-        newUsage = Math.max(0, Math.min(100, newUsage)) // 确保值在0到100之间
-        lastCpuUsage = newUsage
-        return newUsage
-    }
+        // 修改上行数据生成逻辑，使其通常小于下行数据
+        let newUploadValue = generateSmoothData(lastUploadValue, 0, 40)
+        let newDownloadValue = generateSmoothData(lastDownloadValue, 30, 100)
 
-    // 添加新的数据点
-    const addNewDataPoint = (): void => {
-        const newData = getNextCpuUsage()
-        chartData.datasets[0].data.push(newData)
-
-        if (chartData.datasets[0].data.length > maxDataPoints) {
-            chartData.datasets[0].data.shift()
+        // 确保上行数据始终小于下行数据
+        if (newUploadValue >= newDownloadValue) {
+            newUploadValue = newDownloadValue * 0.8
         }
 
-        chart.update()
+        uploadData = [...uploadData, newUploadValue]
+        downloadData = [...downloadData, newDownloadValue]
+
+        if (uploadData.length > maxDataPoints) {
+            uploadData = uploadData.slice(-maxDataPoints)
+        }
+        if (downloadData.length > maxDataPoints) {
+            downloadData = downloadData.slice(-maxDataPoints)
+        }
+
+        uploadData = [...uploadData]
+        downloadData = [...downloadData]
     }
 
     onMount(() => {
-        chart = new Chart(chartContainer, {
-            type: "bar",
-            data: chartData,
-            options: chartOptions,
-        })
+        const interval = setInterval(simulateDataUpdate, 1000) // 每秒更新一次数据
 
-        // 每0.3秒添加数据点
-        const interval = setInterval(addNewDataPoint, 300)
-
-        // 在组件卸载时清除定时器
         return () => {
             clearInterval(interval)
-            chart.destroy()
         }
     })
 </script>
 
-<!-- HTML 模板 -->
-<div class="w-full max-w-2xl mx-auto mt-8 h-64">
-    <canvas bind:this="{chartContainer}"></canvas>
+<div class="w-80 max-w-2xl mx-auto mt-8 h-48">
+    <BarChartLogger {maxDataPoints} {uploadData} {downloadData} />
 </div>
 
 <style>

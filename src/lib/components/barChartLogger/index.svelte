@@ -1,16 +1,19 @@
 <script lang="ts">
     import { onMount, afterUpdate } from "svelte"
     import Chart from "chart.js/auto"
-    import type { ChartConfiguration } from "chart.js"
 
     export let maxDataPoints = 100
-    export let uploadColor = "#FFA726" // 橙色
-    export let downloadColor = "#29B6F6" // 浅蓝色
     export let uploadData: number[] = []
     export let downloadData: number[] = []
 
+    const uploadColor = "#FFD54F" // 更亮的黄色
+    const downloadColor = "#29B6F6" // 浅蓝色
+    const totalColor = "#66BB6A" // 更亮的绿色
+
     let chartContainer: HTMLCanvasElement
     let chart: Chart
+    let recentMaxValues: number[] = []
+    let currentUnit = "kb/s"
 
     $: chartData = {
         labels: Array.from({ length: maxDataPoints }, (_, i) =>
@@ -18,34 +21,74 @@
         ),
         datasets: [
             {
-                label: "下载速率",
-                data:
-                    downloadData.length > 0
-                        ? downloadData.slice(-maxDataPoints).reverse()
-                        : new Array(maxDataPoints).fill(0),
-                backgroundColor: downloadColor,
-                borderWidth: 0,
-                stack: "combined",
-                type: "bar" as const,
-                barPercentage: 1.0,
-                categoryPercentage: 1.0,
-            },
-            {
                 label: "上传速率",
                 data:
                     uploadData.length > 0
                         ? uploadData.slice(-maxDataPoints).reverse()
                         : new Array(maxDataPoints).fill(0),
-                backgroundColor: uploadColor,
-                borderWidth: 0,
-                stack: "combined",
-                type: "bar" as const,
-                barPercentage: 1.0,
-                categoryPercentage: 1.0,
+                backgroundColor: `${uploadColor}80`, // 添加透明度
+                borderColor: uploadColor,
+                borderWidth: 1,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0, // 去掉圆圈
+            },
+            {
+                label: "下载速率",
+                data:
+                    downloadData.length > 0
+                        ? downloadData.slice(-maxDataPoints).reverse()
+                        : new Array(maxDataPoints).fill(0),
+                backgroundColor: `${downloadColor}80`, // 添加透明度
+                borderColor: downloadColor,
+                borderWidth: 1,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0, // 去掉圆圈
+            },
+            {
+                label: "总速率",
+                data: uploadData
+                    .map((u, i) => u + downloadData[i])
+                    .slice(-maxDataPoints)
+                    .reverse(),
+                backgroundColor: `${totalColor}80`, // 添加透明度
+                borderColor: totalColor,
+                borderWidth: 1,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0, // 去掉圆圈
             },
         ],
     }
-    const chartOptions: ChartConfiguration<"bar">["options"] = {
+
+    $: {
+        const currentMaxValue = Math.max(
+            ...uploadData.slice(-1),
+            ...downloadData.slice(-1),
+            uploadData[uploadData.length - 1] +
+                downloadData[downloadData.length - 1],
+        )
+        recentMaxValues = [
+            ...recentMaxValues.slice(-14),
+            currentMaxValue,
+        ].slice(-15)
+    }
+    $: maxValue = Math.max(...recentMaxValues)
+    $: {
+        if (maxValue > 1024) {
+            currentUnit = "mb/s"
+            chartData.datasets.forEach(dataset => {
+                dataset.data = dataset.data.map(value => value / 1024)
+            })
+            maxValue /= 1024
+        } else {
+            currentUnit = "kb/s"
+        }
+    }
+    $: suggestedMax = maxValue * 1.1 // 设置建议的最大值为当前最大值的1.1倍
+
+    $: chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
         animation: {
@@ -63,18 +106,16 @@
                 ticks: {
                     display: false,
                 },
-                offset: false,
-                stacked: true,
             },
             y: {
                 type: "linear" as const,
                 position: "left" as const,
                 min: 0,
-                suggestedMax: 100,
+                max: suggestedMax,
                 grid: {
                     display: true,
                     color: (context: { tick: { value: number } }) => {
-                        if (context.tick.value % 25 === 0) {
+                        if (context.tick.value % (suggestedMax / 4) === 0) {
                             return "rgba(0, 0, 0, 0.1)"
                         }
                         return "rgba(0, 0, 0, 0)"
@@ -86,54 +127,25 @@
                 },
                 ticks: {
                     display: true,
-                    callback: function (value) {
-                        return value + " MB/s"
+                    callback: function (value: number) {
+                        return value.toFixed(2) + " " + currentUnit
                     },
                     color: "rgba(0, 0, 0, 0.6)", // 更柔和的刻度颜色
+                    stepSize: suggestedMax / 4,
                 },
-                stacked: true,
             },
         },
         plugins: {
             legend: {
-                display: true,
+                display: true, // 显示图例
                 position: "top" as const,
-                labels: {
-                    color: "rgba(0, 0, 0, 0.7)", // 更柔和的图例文字颜色
-                    font: {
-                        size: 12,
-                    },
-                },
             },
             tooltip: {
-                enabled: true,
-                backgroundColor: "rgba(255, 255, 255, 0.8)", // 半透明白色背景
-                titleColor: "rgba(0, 0, 0, 0.8)", // 深色标题
-                bodyColor: "rgba(0, 0, 0, 0.7)", // 深色内容
-                borderColor: "rgba(0, 0, 0, 0.1)", // 浅色边框
-                borderWidth: 1,
-                callbacks: {
-                    label: function (context) {
-                        let label = context.dataset.label || ""
-                        if (label) {
-                            label += ": "
-                        }
-                        if (context.parsed.y !== null) {
-                            label += context.parsed.y.toFixed(2) + " MB/s"
-                        }
-                        return label
-                    },
-                },
-            },
-        },
-        elements: {
-            bar: {
-                borderSkipped: false,
+                enabled: false, // 禁用tooltip
             },
         },
         hover: {
-            mode: "index" as const,
-            intersect: false,
+            mode: "nearest" as const, // 修改为有效的hover模式
         },
         layout: {
             padding: {
@@ -142,9 +154,10 @@
             },
         },
     }
+
     onMount(() => {
         chart = new Chart(chartContainer, {
-            type: "bar",
+            type: "line",
             data: chartData,
             options: chartOptions,
         })
@@ -152,9 +165,11 @@
             chart.destroy()
         }
     })
+
     afterUpdate(() => {
         if (chart) {
             chart.data = chartData
+            chart.options = chartOptions
             chart.update()
         }
     })
