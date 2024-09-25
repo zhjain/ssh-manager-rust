@@ -4,6 +4,8 @@
     import connectionStore from "$lib/store/connectionStore"
     import { Minus, Square, X } from "lucide-svelte"
     import { appWindow } from "@tauri-apps/api/window"
+    import TabMenuItem from "./tabMenuItem.svelte"
+
     // 监听用户的输入方式（键盘或鼠标）
     function handleKeyboardEvent() {
         document.body.classList.add("user-is-tabbing")
@@ -91,6 +93,16 @@
     function handleClose() {
         appWindow.close()
     }
+
+    import { page } from "$app/stores"
+    import { cn } from "$lib/utils"
+
+    $: isActive = (route: string) => $page.url.pathname.startsWith(route)
+
+    function handleTabClick(item: Connection | { id: string }) {
+        $connectionStore.current = item
+        goto(`/connections/${item.id}`)
+    }
 </script>
 
 <div
@@ -103,7 +115,32 @@
         <div data-tauri-drag-region class="bg-red-200 w-6 h-6"></div>
         <span data-tauri-drag-region class="font-semibold text-gray-700"
             >SSH连接管理器</span>
+        <div
+            class="{cn('flex h-full ml-20 overflow-x-auto', {
+                hidden: !isActive('/connections'),
+            })}">
+            <TabMenuItem
+                active="{isActive('/connections/all')}"
+                on:click="{() => handleTabClick({ id: 'all' })}">
+                全部
+            </TabMenuItem>
+            {#each $connectionStore.connected as item}
+                <div
+                    class="border-l border-gray-200 h-5 my-auto mx-0.5 opacity-50">
+                </div>
+                <TabMenuItem
+                    active="{isActive(`/connections/${item.id}`)}"
+                    on:click="{() => handleTabClick(item)}">
+                    {item.name}
+                    <X
+                        class="hover:bg-gray-400 rounded transition-all"
+                        color="gray"
+                        size="{18}" />
+                </TabMenuItem>
+            {/each}
+        </div>
     </div>
+
     <div class="flex items-center">
         <div on:click="{handleMinimize}" class="title-bar-button">
             <Minus size="{18}" />

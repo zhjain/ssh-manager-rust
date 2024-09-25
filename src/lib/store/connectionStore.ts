@@ -4,7 +4,7 @@ interface ConnectionStore {
     all: Connection[]
     connected: Connection[]
     selecting: Connection
-    current: Connection
+    current: Connection | { id: string }
     serverStatus: Record<number, ServerStatus>
 }
 

@@ -2,13 +2,14 @@
     import { toast } from "@zerodevx/svelte-toast"
     import { Loader } from "lucide-svelte"
 
-    import { goto } from "$app/navigation"
+    // import { goto } from "$app/navigation"
 
     import Dialog from "$lib/components/common/Dialog.svelte"
     import connectionStore from "$lib/store/connectionStore"
     import { invokeDbOperation } from "$lib/utils"
 
     function initializeForm() {
+
         return {
             name: "",
             host: "",
@@ -87,7 +88,7 @@
 </script>
 
 <div class="p-4">
-    <p class="w-full mb-4">主页内容</p>
+    <p class="w-full mb-4 no-double-click-selection">主页内容</p>
     <button
         class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         on:click="{() => (showDialog = true)}">

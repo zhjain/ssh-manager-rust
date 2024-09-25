@@ -22,6 +22,12 @@ interface ServerStatus {
         rx_speed: number
         tx_speed: number
     }
+    disk_usage: {
+        used: string
+        available: string
+        total: string
+        use_percentage: string
+    }
 }
 
 interface Response<T> {

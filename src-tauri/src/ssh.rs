@@ -187,6 +187,28 @@ async fn query_server_info(connection_id: usize) -> Result<serde_json::Value, St
         let rx_speed = (rx_after.saturating_sub(rx_before) as f64) / 1024.0; // 转换为kb/s
         let tx_speed = (tx_after.saturating_sub(tx_before) as f64) / 1024.0; // 转换为kb/s
 
+        // 查询磁盘空间使用情况
+        let disk_info = session
+            .call("df -h --total")
+            .await
+            .map_err(|e| e.to_string())?;
+        let disk_lines: Vec<&str> = disk_info.lines().collect();
+        let total_parts: Vec<&str> = disk_lines
+            .last()
+            .unwrap_or(&"")
+            .split_whitespace()
+            .collect();
+        let total_used = total_parts
+            .get(2)
+            .unwrap_or(&"0")
+            .parse::<u64>()
+            .unwrap_or(0);
+        let total_available = total_parts
+            .get(3)
+            .unwrap_or(&"0")
+            .parse::<u64>()
+            .unwrap_or(0);
+
         let network_usage = json!({
             "rx_speed": rx_speed,
             "tx_speed": tx_speed
@@ -197,6 +219,10 @@ async fn query_server_info(connection_id: usize) -> Result<serde_json::Value, St
             "memory_usage": memory_usage,
             "cpu_usage": cpu_usage,
             "network_usage": network_usage,
+            "disk_usage": {
+                "used": total_used,
+                "available": total_available
+            },
             "upload_speed": tx_speed,
             "download_speed": rx_speed
         }))))
@@ -219,12 +245,12 @@ fn parse_net_info(info: &str) -> (u64, u64) {
     }
     (rx_bytes, tx_bytes)
 }
-
 async fn start_info_query(id: usize, window: Window) {
     let mut uptime_interval = tokio::time::interval(std::time::Duration::from_secs(60));
     let mut memory_interval = tokio::time::interval(std::time::Duration::from_secs(5));
     let mut cpu_interval = tokio::time::interval(std::time::Duration::from_secs(2));
     let mut network_interval = tokio::time::interval(std::time::Duration::from_secs(1));
+    let mut disk_interval = tokio::time::interval(std::time::Duration::from_secs(30)); // Increased interval for disk usage
 
     loop {
         tokio::select! {
@@ -248,6 +274,11 @@ async fn start_info_query(id: usize, window: Window) {
                     eprintln!("查询网络使用失败: {}", e);
                 }
             }
+            _ = disk_interval.tick() => {
+                if let Err(e) = query_and_emit_disk(id, &window).await {
+                    eprintln!("查询磁盘使用失败: {}", e);
+                }
+            }
         }
     }
 }
@@ -258,7 +289,10 @@ async fn query_and_emit_uptime(id: usize, window: &Window) -> Result<(), String>
         let uptime = session.call("uptime").await.map_err(|e| e.to_string())?;
         let uptime_parts: Vec<&str> = uptime.split(',').collect();
         let uptime_value = uptime_parts.get(0).map(|s| s.trim()).unwrap_or("");
-        let _ = window.emit(&format!("server-uptime-update-{id}"), json!({ "uptime": uptime_value }));
+        let _ = window.emit(
+            &format!("server-uptime-update-{id}"),
+            json!({ "uptime": uptime_value }),
+        );
     }
     Ok(())
 }
@@ -278,7 +312,10 @@ async fn query_and_emit_memory(id: usize, window: &Window) -> Result<(), String>
             "used": memory_parts.get(2).unwrap_or(&"0").parse::<u64>().unwrap_or(0),
             "free": memory_parts.get(3).unwrap_or(&"0").parse::<u64>().unwrap_or(0)
         });
-        let _ = window.emit(&format!("server-memory-update-{id}"), json!({ "memory_usage": memory_usage }));
+        let _ = window.emit(
+            &format!("server-memory-update-{id}"),
+            json!({ "memory_usage": memory_usage }),
+        );
     }
     Ok(())
 }
@@ -311,7 +348,10 @@ async fn query_and_emit_cpu(id: usize, window: &Window) -> Result<(), String> {
             "system": system_cpu,
             "total": user_cpu + system_cpu
         });
-        let _ = window.emit(&format!("server-cpu-update-{id}"), json!({ "cpu_usage": cpu_usage }));
+        let _ = window.emit(
+            &format!("server-cpu-update-{id}"),
+            json!({ "cpu_usage": cpu_usage }),
+        );
     }
     Ok(())
 }
@@ -339,7 +379,44 @@ async fn query_and_emit_network(id: usize, window: &Window) -> Result<(), String
             "rx_speed": rx_speed,
             "tx_speed": tx_speed
         });
-        let _ = window.emit(&format!("server-network-update-{id}"), json!({ "network_usage": network_usage }));
+        let _ = window.emit(
+            &format!("server-network-update-{id}"),
+            json!({ "network_usage": network_usage }),
+        );
+    }
+    Ok(())
+}
+
+async fn query_and_emit_disk(id: usize, window: &Window) -> Result<(), String> {
+    let pool = CONNECTION_POOL.lock().await;
+    if let Some((_, session)) = pool.iter().find(|(conn_id, _)| *conn_id == id) {
+        let disk_info = session
+            .call("df -h --total")
+            .await
+            .map_err(|e| e.to_string())?;
+        let disk_lines: Vec<&str> = disk_info.lines().collect();
+        let total_parts: Vec<&str> = disk_lines
+            .last()
+            .unwrap_or(&"")
+            .split_whitespace()
+            .collect();
+
+        let total_size = total_parts.get(1).unwrap_or(&"0").to_string();
+        let total_used = total_parts.get(2).unwrap_or(&"0").to_string();
+        let total_available = total_parts.get(3).unwrap_or(&"0").to_string();
+        let use_percentage = total_parts.get(4).unwrap_or(&"0%").to_string();
+
+        let _ = window.emit(
+            &format!("server-disk-update-{id}"),
+            json!({
+                "disk_usage": {
+                    "total": total_size,
+                    "used": total_used,
+                    "available": total_available,
+                    "use_percentage": use_percentage
+                }
+            }),
+        );
     }
     Ok(())
 }

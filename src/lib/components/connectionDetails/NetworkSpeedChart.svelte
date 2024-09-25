@@ -13,7 +13,6 @@
 
     const uploadColor = "#FFD54F" // 更亮的黄色
     const downloadColor = "#29B6F6" // 浅蓝色
-    const totalColor = "#66BB6A" // 更亮的绿色
 
     $: serverStatus = $connectionStore.serverStatus[connectionId] || {}
     $: uploadData = serverStatus.uploadSpeedHistory || []
@@ -30,7 +29,7 @@
                     uploadData.length > 0
                         ? uploadData.slice(-maxDataPoints).reverse()
                         : new Array(maxDataPoints).fill(0),
-                backgroundColor: `${uploadColor}80`, // 添加透明度
+                backgroundColor: `${uploadColor}dd`, // 添加透明度
                 borderColor: uploadColor,
                 borderWidth: 1,
                 fill: true,
@@ -43,21 +42,8 @@
                     downloadData.length > 0
                         ? downloadData.slice(-maxDataPoints).reverse()
                         : new Array(maxDataPoints).fill(0),
-                backgroundColor: `${downloadColor}80`, // 添加透明度
+                backgroundColor: `${downloadColor}dd`, // 添加透明度
                 borderColor: downloadColor,
-                borderWidth: 1,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 0, // 去掉圆圈
-            },
-            {
-                label: "总速率",
-                data: uploadData
-                    .map((u, i) => u + downloadData[i])
-                    .slice(-maxDataPoints)
-                    .reverse(),
-                backgroundColor: `${totalColor}80`, // 添加透明度
-                borderColor: totalColor,
                 borderWidth: 1,
                 fill: true,
                 tension: 0.4,
@@ -70,8 +56,6 @@
         const currentMaxValue = Math.max(
             ...uploadData.slice(-1),
             ...downloadData.slice(-1),
-            uploadData[uploadData.length - 1] +
-                downloadData[downloadData.length - 1],
         )
         recentMaxValues = [
             ...recentMaxValues.slice(-14),
@@ -90,7 +74,7 @@
             currentUnit = "kb/s"
         }
     }
-    $: suggestedMax = maxValue * 1.1 // 设置建议的最大值为当前最大值的1.1倍
+    $: suggestedMax = maxValue * 1.3 // 设置建议的最大值为当前最大值的1.1倍
 
     $: chartOptions = {
         responsive: true,
