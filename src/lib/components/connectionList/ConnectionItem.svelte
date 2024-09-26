@@ -23,14 +23,9 @@
             $connectionStore.current = connection
         } else {
             try {
+                connection.connected = true
                 const command: SshCommand = {
-                    OpenConnection: {
-                        id: connection.id,
-                        username: connection.username,
-                        password: connection.password,
-                        host: connection.host,
-                        port: connection.port,
-                    },
+                    OpenConnection: connection,
                 }
                 await invokeSshCommand<{
                     id: number
@@ -39,9 +34,9 @@
                 $connectionStore.current = connection
                 $connectionStore.connected.push(connection)
                 await goto(`/connections/${connection.id}`)
-                connection.connected = true
             } catch (error) {
                 toast.push(error as string)
+                connection.connected = false
             }
         }
     }
