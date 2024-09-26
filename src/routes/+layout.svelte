@@ -20,7 +20,7 @@
         <SiderMenuItem href="{'/'}">连接</SiderMenuItem>
         <SiderMenuItem href="{'/logger'}">日志</SiderMenuItem>
     </div>
-    <div class="flex-1 h-full">
+    <div class="flex-1 h-full z-10">
         <slot />
     </div>
 </div>

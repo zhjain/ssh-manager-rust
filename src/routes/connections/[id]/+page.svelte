@@ -110,8 +110,7 @@
     }
 </script>
 
-<div
-    class="grid grid-cols-2 gap-4 p-4 z-10 bg-white rounded-lg shadow-md w-full">
+<div class="grid grid-cols-2 gap-4 p-4 bg-white rounded-lg shadow-md w-full">
     <div class="bg-gray-100 p-4 rounded-md shadow">
         <span class="text-sm text-gray-600 mb-2 block">磁盘使用情况：</span>
         <span class="text-lg font-bold text-gray-800">
