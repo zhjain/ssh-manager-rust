@@ -247,11 +247,11 @@ fn parse_net_info(info: &str) -> (u64, u64) {
     (rx_bytes, tx_bytes)
 }
 async fn start_info_query(id: usize, window: Window) {
-    let mut uptime_interval = tokio::time::interval(std::time::Duration::from_secs(60));
+    let mut uptime_interval = tokio::time::interval(std::time::Duration::from_secs(5));
     let mut memory_interval = tokio::time::interval(std::time::Duration::from_secs(5));
-    let mut cpu_interval = tokio::time::interval(std::time::Duration::from_secs(2));
+    let mut cpu_interval = tokio::time::interval(std::time::Duration::from_secs(5));
     let mut network_interval = tokio::time::interval(std::time::Duration::from_secs(1));
-    let mut disk_interval = tokio::time::interval(std::time::Duration::from_secs(30)); // Increased interval for disk usage
+    let mut disk_interval = tokio::time::interval(std::time::Duration::from_secs(5)); // Increased interval for disk usage
 
     loop {
         tokio::select! {
