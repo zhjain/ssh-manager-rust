@@ -42,7 +42,10 @@ type SshCommandResult<T> = Response<T>
 type OpenConnectionCommand = {
     OpenConnection: {
         id: number
-        url: string
+        username?: string
+        password?: string
+        host: string
+        port: number
     }
 }
 

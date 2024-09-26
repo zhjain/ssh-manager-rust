@@ -26,7 +26,10 @@
                 const command: SshCommand = {
                     OpenConnection: {
                         id: connection.id,
-                        url: `${connection.username}:${connection.password}@${connection.host}:${connection.port}`,
+                        username: connection.username,
+                        password: connection.password,
+                        host: connection.host,
+                        port: connection.port,
                     },
                 }
                 await invokeSshCommand<{

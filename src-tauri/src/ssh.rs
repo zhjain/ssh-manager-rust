@@ -14,9 +14,18 @@ static CONNECTION_POOL: Lazy<Mutex<Vec<(usize, Session)>>> = Lazy::new(|| Mutex:
 
 #[derive(Debug, serde::Deserialize)]
 pub enum SshCommand {
-    OpenConnection { id: usize, url: String },
+    OpenConnection {
+        id: usize,
+        username: String,
+        password: String,
+        host: String,
+        port: u16,
+    },
     CloseConnection(usize),
-    ExecuteQuery { id: usize, query: String },
+    ExecuteQuery {
+        id: usize,
+        query: String,
+    },
     RetryInfoQuery(usize),
     CloseAllConnections,
 }
@@ -28,7 +37,13 @@ pub async fn handle_ssh_command(
 ) -> Result<serde_json::Value, String> {
     println!("收到SSH命令: {:?}", command);
     match command {
-        SshCommand::OpenConnection { id, url } => open_connection(id, url, window).await,
+        SshCommand::OpenConnection {
+            id,
+            username,
+            password,
+            host,
+            port,
+        } => open_connection(id, username, password, host, port, window).await,
         SshCommand::CloseConnection(id) => close_connection(id).await,
         SshCommand::ExecuteQuery { id, query } => {
             if query == "baseinfo" {
@@ -44,29 +59,16 @@ pub async fn handle_ssh_command(
 
 async fn open_connection(
     id: usize,
-    url: String,
+    username: String,
+    password: String,
+    host: String,
+    port: u16,
     window: Window,
 ) -> Result<serde_json::Value, String> {
     // 解析 URL
-    let parts: Vec<&str> = url.split('@').collect();
-    if parts.len() != 2 {
-        return Err("无效的 URL 格式".into());
-    }
-
-    let credentials: Vec<&str> = parts[0].split(':').collect();
-    let address: Vec<&str> = parts[1].split(':').collect();
-
-    if credentials.len() != 2 || address.len() != 2 {
-        return Err("无效的 URL 格式".into());
-    }
-
-    let username = credentials[0];
-    let password = credentials[1];
-    let host = address[0];
-    let port: u16 = address[1].parse().map_err(|_| "无效的端口号")?;
 
     // 将连接添加到全局连接池
-    let new_session = Session::connect_with_password(username, password, (host, port))
+    let new_session = Session::connect_with_password(username, password, (host.clone(), port))
         .await
         .map_err(|e| e.to_string())?;
     let mut pool = CONNECTION_POOL.lock().await;
@@ -77,10 +79,9 @@ async fn open_connection(
     }
 
     // 这里可以添加更多的连接管理逻辑，比如限制连接池大小、处理连接超时等
-
     Ok(json!(ApiResponse::success(json!({
         "id": id,
-        "message": format!("连接到: {}", parts[1])
+        "message": format!("连接到: {:?}", host)
     }))))
 }
 
